@@ -1,0 +1,444 @@
+<html lang="es">
+<head>
+    <title>WebGL 2.0</title>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        canvas {
+            border: 2px solid #333;
+            margin: 20px auto;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <h2>Damas en WebGL 2.0</h2>
+    <canvas id="webglcanvas" width="500" height="500"></canvas>
+    <noscript><p><b>Lo siento, pero ésta página requiere JavaScript.</b></p></noscript>
+    <!--
+    /***************************************************************************/
+    /* Se definen los códigos shaders.                                         */
+    /***************************************************************************/
+    -->
+    <script id="vs" type="vertex">
+        #version 300 es
+        uniform mat4 uMatrizProyeccion;
+        uniform mat4 uMatrizModelo;
+        layout(location = 0) in vec2 aVertices;
+        void main() {
+            gl_Position = uMatrizProyeccion * uMatrizModelo * vec4(aVertices, 0.0, 1.0);
+        }
+    </script>
+
+    <script id="fs" type="fragment">
+        #version 300 es
+        precision mediump float;
+        uniform vec4 uColor;
+        out vec4 color;
+        void main() {
+            color = uColor;
+        }
+    </script>
+
+    <script>
+        /* Convierte de grados a radianes */
+        function toRadians(grados) {
+          return grados * Math.PI / 180;
+        };
+        /* Matriz Identidad */
+        function identidad(r) {
+            r[0] = 1; r[4] = 0; r[ 8] = 0; r[12] = 0;
+            r[1] = 0; r[5] = 1; r[ 9] = 0; r[13] = 0;
+            r[2] = 0; r[6] = 0; r[10] = 1; r[14] = 0;
+            r[3] = 0; r[7] = 0; r[11] = 0; r[15] = 1;
+        }
+        /* Traslación - glTranslatef */
+        function traslacion(matriz, tx, ty, tz) {
+            var r = new Array(16);
+            r[0] = 1; r[4] = 0; r[ 8] = 0; r[12] = tx;
+            r[1] = 0; r[5] = 1; r[ 9] = 0; r[13] = ty;
+            r[2] = 0; r[6] = 0; r[10] = 1; r[14] = tz;
+            r[3] = 0; r[7] = 0; r[11] = 0; r[15] =  1;
+            multiplica(matriz, matriz, r); // M = M * T
+        }
+        /* Escalación - glScalef */
+        function escalacion(matriz, sx, sy, sz) { 
+            var r = new Array(16);
+            r[0] = sx; r[4] =  0; r[ 8] =  0; r[12] =  0;
+            r[1] =  0; r[5] = sy; r[ 9] =  0; r[13] =  0;
+            r[2] =  0; r[6] =  0; r[10] = sz; r[14] =  0;
+            r[3] =  0; r[7] =  0; r[11] =  0; r[15] =  1;
+            multiplica(matriz, matriz, r);
+        }
+        /* Rotación sobre Z - glRotatef */
+        function rotacionZ(matriz, theta){
+            let r = new Array(16);
+            var c = Math.cos(toRadians(theta));
+            var s = Math.sin(toRadians(theta));
+            r[0] =  c; r[4] = -s; r[ 8] =  0; r[12] = 0;
+            r[1] =  s; r[5] =  c; r[ 9] =  0; r[13] = 0;
+            r[2] =  0; r[6] =  0; r[10] =  1; r[14] = 0;
+            r[3] =  0; r[7] =  0; r[11] =  0; r[15] = 1;
+            multiplica(matriz, matriz, r);
+        }
+        /* Proyección Paralela - glOrtho */
+        function ortho(r, izq, der, abj, arr, cerca, lejos) {
+            r[0] = 2/(der - izq); r[4] =             0; r[ 8] =                  0; r[12] =         -(der + izq)/(der - izq);
+            r[1] =             0; r[5] = 2/(arr - abj); r[ 9] =                  0; r[13] =         -(arr + abj)/(arr - abj);
+            r[2] =             0; r[6] =             0; r[10] = -2/(lejos - cerca); r[14] = -(lejos + cerca)/(lejos - cerca);
+            r[3] =             0; r[7] =             0; r[11] =                  0; r[15] =                                1;
+        }
+        /* Multiplicación de matrices de 4 x 4 */
+        function multiplica(c, a, b) {
+            let r = new Array(16);
+            let i, j, k;
+            for (i = 0; i < 4; i++){
+                for (j = 0; j < 4; j++){
+                    let s = 0;
+                    for (k = 0; k < 4; k++)
+                        s = s + a[i + k * 4] * b[k + j * 4];
+                    r[i + j * 4] = s;
+                }
+            }
+            for (i = 0; i < 16; i++)
+                c[i] = r[i];
+        }
+
+        var MatrizProyeccion = new Array(16);
+        var MatrizModelo = new Array(16);
+        var uMatrizProyeccion;
+        var uMatrizModelo;
+        var uColor;
+
+        var rectanguloVAO;
+        var circuloVAO;
+        var canvas, gl;
+        var tamCasilla = 2;
+        var primera_eleccion = true;
+        var fil, col, pieza;
+
+        // Variables de velocidad
+        var vel_cx = 0.05;  // Velocidad en X para las piezas
+        var vel_cy = 0.05;  // Velocidad en Y para las piezas
+
+        // Variables para animación
+        var animando = false;
+        var piezaAnimada = {
+            activa: false,
+            filOrigen: -1,
+            colOrigen: -1,
+            filDestino: -1,
+            colDestino: -1,
+            tipo: "",
+            x: 0,
+            y: 0,
+            xDestino: 0,
+            yDestino: 0
+        };
+
+        var tablero = [
+            [" ","N"," ","N"," ","N"," ","N"],
+            ["N"," ","N"," ","N"," ","N"," "],
+            [" ","N"," ","N"," ","N"," ","N"],
+            [" "," "," "," "," "," "," "," "],
+            [" "," "," "," "," "," "," "," "],
+            ["B"," ","B"," ","B"," ","B"," "],
+            [" ","B"," ","B"," ","B"," ","B"],
+            ["B"," ","B"," ","B"," ","B"," "]
+        ];
+        
+        // Lista de piezas a eliminar (para animación)
+        var piezasEliminadas = [];
+        
+        function distancia2(x0, y0, x1, y1){
+            return (x1-x0)*(x1-x0) + (y1-y0)*(y1-y0);
+        }
+
+        function puntoEstaDentroDelCirculo(x,y,x0,y0,r){
+            return distancia2(x0,y0,x,y) < (r*r);
+        }
+        
+        function mouseDown(e){
+            // Si está animando, no permitir nuevos movimientos
+            if (animando) return;
+            
+            var posx = e.x;
+            var posy = e.y;
+            posx = posx - canvas.offsetLeft;
+            posy = posy - canvas.offsetTop;
+            console.log('posx = ',posx, ' posy = ', posy);
+            /*
+              0 --------------       16 --------------
+                |            |          |            |
+                |            |          |            |
+             y  |            |        y |            |
+                |            |          |            |
+                |            |          |            |
+            500 --------------        0 --------------
+                0     x    500          0     x     16 
+            
+                     500 -> 16                500 -> 16
+                    posx -> x                posy -> y
+                    posx*16                      posy*16               posy
+               x = ---------           y = 16 - --------- = 16 * (1 - ------)
+                      500                          500                 500
+            */
+            var x = (posx * 16) / 500;
+            var y = 16 - (posy * 16) / 500;
+            console.log('x = ', x, ' y = ', y);
+
+            let filActual = 7 - Math.floor(y / tamCasilla);
+            let colActual = Math.floor(x / tamCasilla);
+            console.log('fil = ', filActual, 'col = ',colActual);
+            
+            if (filActual >= 0 && filActual < 8 && colActual >= 0 && colActual < 8) {
+                if (primera_eleccion) {
+                    // Primera selección: guardar pieza y posición
+                    if (tablero[filActual][colActual] !== " ") {
+                        fil = filActual;
+                        col = colActual;
+                        pieza = tablero[fil][col];
+                        primera_eleccion = false;
+                        console.log("Pieza seleccionada:", pieza, "en", fil + 1, col + 1);
+                    }
+                } else {
+                    // Segunda selección: mover la pieza
+                    // Solo permitimos mover a casillas negras y vacías
+                    let esNegra = (filActual + colActual) % 2 == 1;
+                    if (esNegra && tablero[filActual][colActual] == " ") {
+                        // Verificamos si es una captura
+                        let esComer = Math.abs(filActual - fil) == 2 && Math.abs(colActual - col) == 2;
+                        if (esComer) {
+                            // Calculamos la posición de la pieza a capturar
+                            let filMedia = Math.floor((filActual + fil) / 2);
+                            let colMedia = Math.floor((colActual + col) / 2);
+                            
+                            // Verificamos si hay una pieza en la posición media y es de color opuesto
+                            if (tablero[filMedia][colMedia] != " " && tablero[filMedia][colMedia] != pieza) {                                
+                                // Guardamos la pieza a eliminar para animar su salida
+                                let piezaEliminada = {
+                                    fil: filMedia,
+                                    col: colMedia,
+                                    tipo: tablero[filMedia][colMedia],
+                                    x: (2*colMedia) + 1,
+                                    y: 15 - (filMedia*2),
+                                    vel_x: (colMedia < 4) ? -0.1 : 0.1,
+                                    vel_y: (filMedia < 4) ? 0.1 : -0.1
+                                };
+                                piezasEliminadas.push(piezaEliminada);
+                                // Vaciar la posición de la pieza capturada
+                                tablero[filMedia][colMedia] = " ";
+                            }
+                        }
+                        // Iniciar animación de movimiento
+                        piezaAnimada.activa = true;
+                        piezaAnimada.filOrigen = fil;
+                        piezaAnimada.colOrigen = col;
+                        piezaAnimada.filDestino = filActual;
+                        piezaAnimada.colDestino = colActual;
+                        piezaAnimada.tipo = pieza;
+                        piezaAnimada.x = (2*col) + 1;
+                        piezaAnimada.y = 15 - (fil*2);
+                        piezaAnimada.xDestino = (2*colActual) + 1;
+                        piezaAnimada.yDestino = 15 - (filActual*2);
+                        // Vaciar la posición de origen temporalmente
+                        tablero[fil][col] = " ";
+                        // Iniciar animación
+                        animando = true;
+                        requestAnimationFrame(actualizarAnimacion);
+                        primera_eleccion = true;
+                        console.log("Pieza movida a", filActual + 1, colActual + 1);
+                    } else {
+                        primera_eleccion = true;
+                        alert("Movimiento no valido");
+                    }
+                }
+                dibuja();
+            }
+        }
+        function actualizarAnimacion() {
+            let hayAnimacion = false;
+            // Actualizar piezas eliminadas
+            for (let i = 0; i < piezasEliminadas.length; i++) {
+                let pieza = piezasEliminadas[i];
+                // Actualizar posición
+                pieza.x += pieza.vel_x;
+                pieza.y += pieza.vel_y;
+                // Eliminar la pieza si ya salió del tablero
+                if (pieza.x < -2 || pieza.x > 18 || pieza.y < -2 || pieza.y > 18) {
+                    piezasEliminadas.splice(i, 1);
+                    i--;
+                } else {
+                    hayAnimacion = true;
+                }
+            }
+            // Actualizar pieza en movimiento
+            if (piezaAnimada.activa) {
+                let dx = piezaAnimada.xDestino - piezaAnimada.x;
+                let dy = piezaAnimada.yDestino - piezaAnimada.y;   
+                // Calcular dirección del movimiento
+                let dirX = Math.sign(dx);
+                let dirY = Math.sign(dy);
+                // Aplicar velocidad en la dirección correcta
+                if (Math.abs(dx) > vel_cx) {
+                    piezaAnimada.x += dirX * vel_cx;
+                    hayAnimacion = true;
+                } else {
+                    piezaAnimada.x = piezaAnimada.xDestino;
+                }
+                if (Math.abs(dy) > vel_cy) {
+                    piezaAnimada.y += dirY * vel_cy;
+                    hayAnimacion = true;
+                } else {
+                    piezaAnimada.y = piezaAnimada.yDestino;
+                }
+                // Verificar si la pieza llegó a su destino y Colocar la pieza en su posición final en el tablero
+                if (piezaAnimada.x === piezaAnimada.xDestino && piezaAnimada.y === piezaAnimada.yDestino) {
+                    tablero[piezaAnimada.filDestino][piezaAnimada.colDestino] = piezaAnimada.tipo;
+                    piezaAnimada.activa = false;
+                }
+            }
+            // Actualizar estado de animación global
+            animando = hayAnimacion || piezaAnimada.activa;
+            dibuja();
+            if (animando) {
+                requestAnimationFrame(actualizarAnimacion);
+            }
+        }
+
+        function dibuja(){
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            // Dibujamos el tablero
+            gl.bindVertexArray(rectanguloVAO);
+            for(let x = 0; x < 16; x += 2) {
+                for(let y = 0; y < 16; y += 2) {
+                    let flag = ((x / 2) + (y / 2)) % 2 == 0
+                    identidad(MatrizModelo);
+                    traslacion(MatrizModelo, x, y, 0);
+                    gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                    if(flag)
+                        gl.uniform4f(uColor, 0.1, 0.1, 0.1, 1);
+                    else
+                        gl.uniform4f(uColor, 0.9, 0.9, 0.9, 1);
+                    gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+                }
+            }
+            // Dibujamos las fichas en el tablero
+            gl.bindVertexArray(circuloVAO);
+            for(let i=0; i<8; i++) {
+                for(let j=0; j<8; j++) {
+                    if(tablero[i][j] == "N" || tablero[i][j] == "B") {
+                        let x = (2*j) + 1;
+                        let y = 15 - (i*2);
+                        identidad(MatrizModelo);
+                        traslacion(MatrizModelo, x, y, 0);
+                        gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                        if(tablero[i][j] == "N")
+                            gl.uniform4f(uColor, 0.7, 0.0, 0.0, 1);
+                        else
+                            gl.uniform4f(uColor, 0.95, 0.95, 0.84, 1);
+                        gl.drawArrays(gl.TRIANGLE_FAN, 0, 360);
+                    }
+                }
+            }
+            // Dibujamos la pieza en movimiento (si hay)
+            if (piezaAnimada.activa) {
+                identidad(MatrizModelo);
+                traslacion(MatrizModelo, piezaAnimada.x, piezaAnimada.y, 0);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                if(piezaAnimada.tipo == "N")
+                    gl.uniform4f(uColor, 0.7, 0.0, 0.0, 1);
+                else
+                    gl.uniform4f(uColor, 0.95, 0.95, 0.84, 1);
+                gl.drawArrays(gl.TRIANGLE_FAN, 0, 360);
+            }
+            // Dibujamos las piezas que están siendo eliminadas
+            for (let i = 0; i < piezasEliminadas.length; i++) {
+                identidad(MatrizModelo);
+                traslacion(MatrizModelo, piezasEliminadas[i].x, piezasEliminadas[i].y, 0);
+                gl.uniformMatrix4fv(uMatrizModelo, false, MatrizModelo);
+                if(piezasEliminadas[i].tipo == "N")
+                    gl.uniform4f(uColor, 0.7, 0.0, 0.0, 1);
+                else
+                    gl.uniform4f(uColor, 0.95, 0.95, 0.84, 1);
+                gl.drawArrays(gl.TRIANGLE_FAN, 0, 360);
+            }
+            gl.bindVertexArray(null);
+        }
+
+        function main(){
+            canvas = document.getElementById("webglcanvas");
+            gl = canvas.getContext("webgl2");
+
+            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+            canvas.addEventListener("mousedown", mouseDown, false);
+
+            // Se compilan y enlazan los shaders
+            var shaderDeVertice = gl.createShader(gl.VERTEX_SHADER);
+            gl.shaderSource(shaderDeVertice, document.getElementById("vs").text.trim());
+            gl.compileShader(shaderDeVertice);
+
+            var shaderDeFragmento = gl.createShader(gl.FRAGMENT_SHADER);
+            gl.shaderSource(shaderDeFragmento, document.getElementById("fs").text.trim());
+            gl.compileShader(shaderDeFragmento);
+
+            var programaID = gl.createProgram();
+            gl.attachShader(programaID, shaderDeVertice); 
+            gl.attachShader(programaID, shaderDeFragmento);
+            gl.linkProgram(programaID);
+
+            gl.useProgram(programaID);
+
+            // Se define la geometria y se crean los buffer
+            var vertices = [
+                0.0, 0.0, // 0
+                2.0, 0.0, // 1
+                2.0, 2.0, // 2
+                0.0, 2.0  // 3
+            ];
+
+            rectanguloVAO = gl.createVertexArray();
+            gl.bindVertexArray(rectanguloVAO);
+            var codigoVertices = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, codigoVertices);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(0);
+            gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+            gl.bindVertexArray(null);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+
+            // Se define la geometria y se crean los buffer
+            var verticesCirculo = [];
+            var radio = 0.7;
+            for (var i = 0; i < 360; i++) {
+                verticesCirculo.push(radio * Math.cos(i * Math.PI / 180));
+                verticesCirculo.push(radio * Math.sin(i * Math.PI / 180));
+            }
+            circuloVAO = gl.createVertexArray();
+            gl.bindVertexArray(circuloVAO);
+            var codigoVertices1 = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, codigoVertices1);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verticesCirculo), gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(0);
+            gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+            gl.bindVertexArray(null);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+
+            uColor = gl.getUniformLocation(programaID, "uColor");
+            uMatrizProyeccion = gl.getUniformLocation(programaID, "uMatrizProyeccion");
+            uMatrizModelo = gl.getUniformLocation(programaID, "uMatrizModelo");
+            ortho(MatrizProyeccion, 0, 16, 0, 16, -1, 1);
+            gl.uniformMatrix4fv(uMatrizProyeccion, false, MatrizProyeccion);
+            gl.clearColor(0.4, 0.6, 0.8, 1.0);
+          
+            dibuja();
+        }
+        window.onload = main;
+    </script>
+</body>
+</html>
