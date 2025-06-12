@@ -1,0 +1,152 @@
+html, body {
+    width:  100%;
+    height: 100%;
+    margin: 0px;
+    border: 0;
+    overflow: hidden; /* Deshabilita las barras de desplazamiento */
+    display: block;   /* Sin contenido flotantes a los lados */
+}
+#gui {
+    position : absolute; /* Posición absoluta con relación a la ventana gráfica */
+    top : 0;
+    left : 0;
+} 
+
+#content {
+    display: flex;
+    width: 100%;
+    height: 100vh;
+}
+
+/* Panel izquierdo - Dashboard de controles */
+#tools {
+    width: 300px;
+    min-width: 280px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 2px 0 20px rgba(0, 0, 0, 0.1);
+    padding: 30px 25px;
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+    overflow-y: auto;
+}
+
+#tools h3 {
+    color: #2c3e50;
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e3f2fd;
+}
+
+/* Estilos para las opciones de radio */
+#opciones {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.radio-option {
+    display: flex;
+    align-items: center;
+    padding: 12px 15px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: rgba(255, 255, 255, 0.7);
+    border: 2px solid transparent;
+}
+
+.radio-option:hover {
+    background: rgba(103, 126, 234, 0.1);
+    border-color: rgba(103, 126, 234, 0.3);
+    transform: translateY(-2px);
+}
+
+.radio-option input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    margin-right: 12px;
+    accent-color: #667eea;
+    cursor: pointer;
+}
+
+.radio-option label {
+    color: #34495e;
+    font-weight: 500;
+    cursor: pointer;
+    flex: 1;
+}
+
+.radio-option input[type="radio"]:checked + label {
+    color: #667eea;
+    font-weight: 600;
+}
+
+.radio-option:has(input[type="radio"]:checked) {
+    background: rgba(103, 126, 234, 0.15);
+    border-color: #667eea;
+    box-shadow: 0 4px 15px rgba(103, 126, 234, 0.2);
+}
+
+/* Botón de reinicio */
+#reset {
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 25px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(103, 126, 234, 0.3);
+    margin-top: 10px;
+}
+
+#reset:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(103, 126, 234, 0.4);
+}
+
+#reset:active {
+    transform: translateY(0);
+}
+
+/* Panel derecho - Canvas */
+#canvas-holder {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* padding: 20px; */
+    background: rgba(0, 0, 0, 0.05);
+}
+.light-x-slider-container {
+    display: flex;
+    flex-direction: column;
+    font-size: 14px;
+    color: #2c3e50;
+    gap: 5px;
+}
+.light-x-slider-container input[type=range] {
+    width: 100%;
+}
+.slider-container,
+.light-x-slider-container,
+.zoom-slider-container {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 14px;
+    color: #2c3e50;
+}
+
+.slider-container input[type=range],
+.light-x-slider-container input[type=range],
+.zoom-slider-container input[type=range] {
+    width: 100%;
+}

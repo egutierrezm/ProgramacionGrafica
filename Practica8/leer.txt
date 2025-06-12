@@ -1,0 +1,11 @@
+Instalar un servidor web o servidor HTTP en su máquina,
+para poder ejecutar el proyecto correctamente.
+
+Ejemplos de servidores web que puede instalar en su máquina:
+wampserver, appserv, apache, xampp, etc.
+
+Una vez instalado el servidor web, copiar todos los archivos
+de Proyecto8 en la carpeta www o htdocs del servidor web.
+
+Escribir en el navegador:
+http://localhost/Proyecto8/index.html
